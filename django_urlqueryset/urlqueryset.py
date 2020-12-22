@@ -1,6 +1,7 @@
 from urllib.parse import urlencode
 
 import requests
+from django.conf import settings
 from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
 from requests import HTTPError
@@ -18,7 +19,7 @@ class UrlQuery:
         self.model = model
         self.filters = {}
         self.order_by = []
-        self.high_mark = 1000000
+        self.high_mark = settings.URLQS_HIGH_MARK
         self.low_mark = 0
         self.nothing = False
         self.distinct_fields = []
@@ -122,14 +123,14 @@ class UrlQuerySet(QuerySet):
         if self._count is None:
             qs = self._chain()
             qs.query.set_limits(0, 1)
-            return qs.query._execute(self.request_params)['count']
+            return qs.query._execute(self.request_params)[settings.URLQS_COUNT]
         return self._count
 
     def _fetch_all(self):
         if self._count is None:
             response = self.query._execute(self.request_params)
-            self._result_cache = list(self.deserialize(response['results']))
-            self._count = response['count']
+            self._result_cache = list(self.deserialize(response[settings.URLQS_RESULTS]))
+            self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
         response = requests.post(json=kwargs, **self.request_params)

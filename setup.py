@@ -8,6 +8,7 @@ setup(
     version=__import__('django_urlqueryset').get_version(),
     packages=find_packages(),
     include_package_data=True,
+    url='https://github.com/MaurizioPilia/django-urlqueryset',
     install_requires=[
         'Django>=1.8',
         'djangorestframework>=3.9.4',

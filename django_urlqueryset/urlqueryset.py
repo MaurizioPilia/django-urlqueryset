@@ -67,7 +67,7 @@ class UrlQuery:
     def add_q(self, q_object):
         self.filters.update(dict(q_object.children))
 
-    def _execute(self, request_params):
+    def _execute(self, request_params, method='get', **kwargs):
         query_params = {}
         if self.high_mark is not None:
             query_params['offset'] = self.low_mark
@@ -77,13 +77,14 @@ class UrlQuery:
             query_params['ordering'] = ','.join(self.order_by)
         query_params.update(self.filters)
         for key, value in query_params.items():
-            if key.endswith('__in') and isinstance(value, list):
-                query_params[key] = ','.join(value)
+            if key.endswith('__in') and isinstance(value, (list, tuple)):
+                query_params[key] = ",".join(str(i) for i in value)
         _request_params = request_params.copy()
+        _request_params.update(kwargs)
         url = _request_params.pop('url')
         if query_params:
             url = f"{url}?{urlencode(query_params, safe=',')}"
-        response = requests.get(url=url, **_request_params)
+        response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
         return response.json()
 
@@ -140,6 +141,9 @@ class UrlQuerySet(QuerySet):
         except HTTPError:
             raise ValidationError({'remote_api_error': response.json()})
 
+    def update(self, **kwargs):
+        return self._chain().query._execute(self.request_params, method='patch', json=kwargs)
+
     def deserialize(self, json_data=()):
         related_fields = {}
         for field in self.model._meta.fields:
@@ -195,4 +199,5 @@ class UrlQuerySet(QuerySet):
         qs.query.set_limits(k, k + 1)
         qs._fetch_all()
         return qs._result_cache[0]
+
 

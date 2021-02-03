@@ -1,13 +1,12 @@
-from .urlqueryset import *
+import pkg_resources
+from .urlqueryset import UrlQuerySet
+from .fields import UrlFileField, UrlImageField
 
-VERSION = (0, 2, 0)
+__all__ = ('UrlQuerySet', 'UrlFileField', 'UrlImageField', 'VERSION')
 
-__version__ = '.'.join([str(n) for n in VERSION])
+__version__ = pkg_resources.get_distribution(__name__).version
 
-
-def get_version():
-    return __version__
-
+VERSION = __version__.split('.')
 
 default_app_config = 'django_urlqueryset.apps.CheckConfig'
 

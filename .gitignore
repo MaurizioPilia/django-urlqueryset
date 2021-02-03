@@ -6,3 +6,4 @@ dist
 .project
 .idea/*
 django_urlqueryset.egg-info/*
+*.egg-info

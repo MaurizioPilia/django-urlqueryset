@@ -92,7 +92,7 @@ class UrlQuery:
             url = f"{url}?{urlencode(query_params, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
-        return response.json()
+        return response.json() if response.headers.get('Content-Type') == 'application/json' else response
 
 
 class UrlQuerySet(QuerySet):

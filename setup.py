@@ -5,7 +5,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='django_urlqueryset',
-    version=__import__('django_urlqueryset').get_version(),
+    version='0.3.0',
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/MaurizioPilia/django-urlqueryset',
@@ -13,6 +13,15 @@ setup(
         'Django>=1.8',
         'djangorestframework>=3.9.4',
         'requests>=2.11.1',
+        'python-magic>=0.4.18'
     ],
+    extras_require={
+        'test': [
+            'ipython',
+            'ipdb',
+            'Sphinx',
+            'sphinx-rtd-theme',
+        ]
+    },
     zip_safe=False,
 )

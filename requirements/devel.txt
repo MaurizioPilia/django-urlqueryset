@@ -1,4 +1,0 @@
--r test.txt
-ipython
-Sphinx
-sphinx-rtd-theme

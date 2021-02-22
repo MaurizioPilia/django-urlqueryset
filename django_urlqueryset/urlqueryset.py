@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 import requests
@@ -6,6 +7,10 @@ from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
 from requests import HTTPError
 from rest_framework.exceptions import ValidationError
+
+from django_urlqueryset.utils import get_default_params
+
+logger = logging.getLogger(__name__)
 
 
 class UrlModelIterable(ModelIterable):
@@ -79,9 +84,10 @@ class UrlQuery:
         for key, value in query_params.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
                 query_params[key] = ",".join(str(i) for i in value)
-        _request_params = request_params.copy()
+        _request_params = get_default_params()
+        _request_params.update(request_params.copy())
         _request_params.update(kwargs)
-        url = _request_params.pop('url')
+        url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
         if query_params:
             url = f"{url}?{urlencode(query_params, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
@@ -92,7 +98,7 @@ class UrlQuery:
 class UrlQuerySet(QuerySet):
 
     def __init__(self, *args, **kwargs):
-        self.request_params = kwargs.pop('request_params', None)
+        self.request_params = kwargs.pop('request_params', {})
         super().__init__(*args, **kwargs)
         if isinstance(self.query, Query):
             self.query = UrlQuery(self.model)
@@ -134,12 +140,11 @@ class UrlQuerySet(QuerySet):
             self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
-        response = requests.post(json=kwargs, **self.request_params)
         try:
-            response.raise_for_status()
-            return list(self.deserialize([response.json()]))[0]
+            response = self.query._execute(self.request_params, method='post', json=kwargs)
+            return list(self.deserialize([response]))[0]
         except HTTPError:
-            raise ValidationError({'remote_api_error': response.json()})
+            raise ValidationError({'remote_api_error': response})
 
     def update(self, **kwargs):
         return self._chain().query._execute(self.request_params, method='patch', json=kwargs)

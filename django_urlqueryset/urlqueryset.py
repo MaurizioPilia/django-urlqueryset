@@ -144,14 +144,14 @@ class UrlQuerySet(QuerySet):
             response = self.query._execute(self.request_params, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]
         except HTTPError as e:
-            raise ValidationError({'remote_api_error': e.detail})
+            raise ValidationError({'remote_api_error': e.response.json()})
 
     def delete(self, **kwargs):
         try:
             response = self.query._execute(self.request_params, method='delete', json=kwargs)
             return response
         except HTTPError as e:
-            raise ValidationError({'remote_api_error': e.detail})
+            raise ValidationError({'remote_api_error': e.response.json()})
 
     def update(self, **kwargs):
         return self._chain().query._execute(self.request_params, method='patch', json=kwargs)

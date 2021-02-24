@@ -143,8 +143,8 @@ class UrlQuerySet(QuerySet):
         try:
             response = self.query._execute(self.request_params, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]
-        except HTTPError:
-            raise ValidationError({'remote_api_error': response})
+        except HTTPError as e:
+            raise ValidationError({'remote_api_error': e.detail})
 
     def delete(self, **kwargs):
         try:

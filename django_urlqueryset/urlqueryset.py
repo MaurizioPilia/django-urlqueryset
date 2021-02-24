@@ -92,7 +92,7 @@ class UrlQuery:
             url = f"{url}?{urlencode(query_params, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
-        return response.json()
+        return response.json() if response.headers.get('Content-Type') == 'application/json' else response
 
 
 class UrlQuerySet(QuerySet):
@@ -145,6 +145,13 @@ class UrlQuerySet(QuerySet):
             return list(self.deserialize([response]))[0]
         except HTTPError:
             raise ValidationError({'remote_api_error': response})
+
+    def delete(self, **kwargs):
+        try:
+            response = self.query._execute(self.request_params, method='delete', json=kwargs)
+            return response
+        except HTTPError as e:
+            raise ValidationError({'remote_api_error': e.detail})
 
     def update(self, **kwargs):
         return self._chain().query._execute(self.request_params, method='patch', json=kwargs)

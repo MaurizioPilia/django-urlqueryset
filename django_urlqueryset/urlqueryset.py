@@ -80,6 +80,8 @@ class UrlQuery:
             query_params['limit'] = self.high_mark - self.low_mark
         if self.order_by:
             query_params['ordering'] = ','.join(self.order_by)
+        elif self.get_meta().ordering:
+            query_params['ordering'] = ','.join(self.get_meta().ordering)
         query_params.update(self.filters)
         for key, value in query_params.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
@@ -96,7 +98,6 @@ class UrlQuery:
 
 
 class UrlQuerySet(QuerySet):
-
     def __init__(self, *args, **kwargs):
         self.request_params = kwargs.pop('request_params', {})
         super().__init__(*args, **kwargs)

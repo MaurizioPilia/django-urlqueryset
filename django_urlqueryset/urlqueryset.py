@@ -29,6 +29,9 @@ class UrlQuery(Query):
         self.distinct_fields = []
         super(UrlQuery, self).__init__(model, **kwargs)
 
+    def get_meta(self):
+        return self.model._meta
+
     def set_limits(self, low=None, high=None):
         if high is not None:
             if self.high_mark is not None:

@@ -1,12 +1,12 @@
 import logging
-from urllib.parse import urlencode
-
 import requests
 from django.conf import settings
 from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
+from django.db.models.sql import Query
 from requests import HTTPError
 from rest_framework.exceptions import ValidationError
+from urllib.parse import urlencode
 
 from django_urlqueryset.utils import get_default_params
 
@@ -18,9 +18,8 @@ class UrlModelIterable(ModelIterable):
         return self.queryset.deserialize(self.queryset._result_cache)
 
 
-class UrlQuery:
-
-    def __init__(self, model, *args, **kwargs):
+class UrlQuery(Query):
+    def __init__(self, model, **kwargs):
         self.model = model
         self.filters = {}
         self.order_by = []
@@ -28,6 +27,7 @@ class UrlQuery:
         self.low_mark = 0
         self.nothing = False
         self.distinct_fields = []
+        super(UrlQuery, self).__init__(model, **kwargs)
 
     def set_limits(self, low=None, high=None):
         if high is not None:

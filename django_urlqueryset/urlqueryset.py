@@ -75,7 +75,7 @@ class UrlQuery:
     def add_q(self, q_object):
         self.filters.update(dict(q_object.children))
 
-    def _execute(self, request_params, method='get', **kwargs):
+    def _execute(self, request_params, user=None, method='get', **kwargs):
         query_params = {}
         if self.high_mark is not None:
             query_params['offset'] = self.low_mark
@@ -89,7 +89,7 @@ class UrlQuery:
         for key, value in query_params.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
                 query_params[key] = ",".join(str(i) for i in value)
-        _request_params = get_default_params()
+        _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
@@ -109,10 +109,12 @@ class UrlQuerySet(QuerySet):
         self._iterable_class = UrlModelIterable
         self._count = None
         self._result_cache = None
+        self.logged_user = None
 
     def _clone(self):
         c = super()._clone()
         c.request_params = self.request_params
+        c.logged_user = self.logged_user
         return c
 
     def as_manager(cls, **request_params):
@@ -139,26 +141,26 @@ class UrlQuerySet(QuerySet):
 
     def _fetch_all(self):
         if self._count is None:
-            response = self.query._execute(self.request_params)
+            response = self.query._execute(self.request_params, user=self.logged_user)
             self._result_cache = list(self.deserialize(response[settings.URLQS_RESULTS]))
             self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
         try:
-            response = self.query._execute(self.request_params, method='post', json=kwargs)
+            response = self.query._execute(self.request_params, user=self.logged_user, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]
         except HTTPError as e:
             raise ValidationError({'remote_api_error': e.response.json()})
 
     def delete(self, **kwargs):
         try:
-            response = self.query._execute(self.request_params, method='delete', json=kwargs)
+            response = self.query._execute(self.request_params, user=self.logged_user, method='delete', json=kwargs)
             return response
         except HTTPError as e:
             raise ValidationError({'remote_api_error': e.response.json()})
 
     def update(self, **kwargs):
-        return self._chain().query._execute(self.request_params, method='patch', json=kwargs)
+        return self._chain().query._execute(self.request_params, user=self.logged_user, method='patch', json=kwargs)
 
     def deserialize(self, json_data=()):
         related_fields = {}
@@ -185,6 +187,11 @@ class UrlQuerySet(QuerySet):
                 else:
                     setattr(obj, field, value)
             yield obj
+
+    def set_logged_user(self, user):
+        clone = self._chain()
+        clone.logged_user = user
+        return clone
 
     def __getitem__(self, k):
         """Retrieve an item or slice from the set of results."""

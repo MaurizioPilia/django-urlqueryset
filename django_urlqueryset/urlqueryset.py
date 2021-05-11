@@ -22,11 +22,9 @@ class UrlQuery:
     def __init__(self, model, where=WhereNode, alias_cols=True, **kwargs):
         self.model = model
         self.filters = {}
-        self.order_by = []
-        self.high_mark = settings.URLQS_HIGH_MARK
+        self.high_mark = None
         self.low_mark = 0
         self.nothing = False
-        self.distinct_fields = []
 
 
         self.alias_refcount = {}
@@ -67,7 +65,6 @@ class UrlQuery:
         # See compiler.get_group_by() for details.
         self.group_by = None
         self.order_by = ()
-        self.low_mark, self.high_mark = 0, None  # Used for offset/limit
         self.distinct = False
         self.distinct_fields = ()
         self.select_for_update = False
@@ -131,7 +128,7 @@ class UrlQuery:
         self.nothing = True
 
     def clear_ordering(self, force_empty):
-        self.order_by = []
+        self.order_by = ()
 
     def add_ordering(self, *ordering):
         if ordering:
@@ -156,11 +153,12 @@ class UrlQuery:
         self.filters.update(dict(q_object.children))
 
     def _execute(self, request_params, user=None, method='get', **kwargs):
-        query_params = {}
-        if self.high_mark is not None:
-            query_params['offset'] = self.low_mark
-        if self.low_mark is not None:
-            query_params['limit'] = self.high_mark - self.low_mark
+        if self.high_mark is None:
+            self.high_mark = settings.URLQS_HIGH_MARK
+        query_params = {
+            'offset': self.low_mark,
+            'limit': self.high_mark - self.low_mark
+        }
         if self.order_by:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:

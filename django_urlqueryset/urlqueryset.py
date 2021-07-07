@@ -75,7 +75,7 @@ class UrlQuery(Query):
     def add_q(self, q_object):
         self.filters.update(dict(q_object.children))
 
-    def _execute(self, request_params, method='get', **kwargs):
+    def _execute(self, request_params, method=None, **kwargs):
         query_params = {}
         if self.high_mark is not None:
             query_params['offset'] = self.low_mark
@@ -92,9 +92,15 @@ class UrlQuery(Query):
         _request_params = get_default_params()
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
+        fetch_method = _request_params.pop('fetch_method')
+        method = fetch_method if not method else method
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
-        if query_params:
+        print('query_params')
+        print(query_params)
+        if query_params and fetch_method == 'get':
             url = f"{url}?{urlencode(query_params, safe=',')}"
+        elif query_params and fetch_method == 'post':
+            _request_params['data'] = query_params
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
         return response.json() if response.headers.get('Content-Type') == 'application/json' else response
@@ -144,6 +150,8 @@ class UrlQuerySet(QuerySet):
             self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
+        if self.request_params.get('fetch_method') == 'post':
+            raise ValidationError({'remote_api_error': 'Create not available'})
         try:
             response = self.query._execute(self.request_params, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]

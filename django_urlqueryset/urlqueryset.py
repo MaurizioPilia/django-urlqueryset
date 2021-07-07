@@ -173,8 +173,6 @@ class UrlQuery:
         fetch_method = _request_params.pop('fetch_method')
         method = fetch_method if not method else method
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
-        print('query_params')
-        print(query_params)
         if query_params and fetch_method == 'get':
             url = f"{url}?{urlencode(query_params, safe=',')}"
         elif query_params and fetch_method == 'post':

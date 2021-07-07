@@ -3,7 +3,7 @@ import requests
 from django.conf import settings
 from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
-from django.db.models.sql import Query
+from django.db.models.sql.where import WhereNode
 from requests import HTTPError
 from rest_framework.exceptions import ValidationError
 from urllib.parse import urlencode
@@ -18,16 +18,93 @@ class UrlModelIterable(ModelIterable):
         return self.queryset.deserialize(self.queryset._result_cache)
 
 
-class UrlQuery(Query):
-    def __init__(self, model, **kwargs):
+class UrlQuery:
+    def __init__(self, model, where=WhereNode, alias_cols=True, **kwargs):
         self.model = model
         self.filters = {}
-        self.order_by = []
-        self.high_mark = settings.URLQS_HIGH_MARK
+        self.high_mark = None
         self.low_mark = 0
         self.nothing = False
-        self.distinct_fields = []
-        super(UrlQuery, self).__init__(model, **kwargs)
+
+
+        self.alias_refcount = {}
+        # alias_map is the most important data structure regarding joins.
+        # It's used for recording which joins exist in the query and what
+        # types they are. The key is the alias of the joined table (possibly
+        # the table name) and the value is a Join-like object (see
+        # sql.datastructures.Join for more information).
+        self.alias_map = {}
+        # Whether to provide alias to columns during reference resolving.
+        self.alias_cols = alias_cols
+        # Sometimes the query contains references to aliases in outer queries (as
+        # a result of split_exclude). Correct alias quoting needs to know these
+        # aliases too.
+        # Map external tables to whether they are aliased.
+        self.external_aliases = {}
+        self.table_map = {}  # Maps table names to list of aliases.
+        self.default_cols = True
+        self.default_ordering = True
+        self.standard_ordering = True
+        self.used_aliases = set()
+        self.filter_is_sticky = False
+        self.subquery = False
+        # SQL-related attributes
+        # Select and related select clauses are expressions to use in the
+        # SELECT clause of the query.
+        # The select is used for cases where we want to set up the select
+        # clause to contain other than default fields (values(), subqueries...)
+        # Note that annotations go to annotations dictionary.
+        self.select = ()
+        self.where = where()
+        self.where_class = where
+        # The group_by attribute can have one of the following forms:
+        #  - None: no group by at all in the query
+        #  - A tuple of expressions: group by (at least) those expressions.
+        #    String refs are also allowed for now.
+        #  - True: group by all select fields of the model
+        # See compiler.get_group_by() for details.
+        self.group_by = None
+        self.order_by = ()
+        self.distinct = False
+        self.distinct_fields = ()
+        self.select_for_update = False
+        self.select_for_update_nowait = False
+        self.select_for_update_skip_locked = False
+        self.select_for_update_of = ()
+        self.select_for_no_key_update = False
+        self.select_related = False
+        # Arbitrary limit for select_related to prevents infinite recursion.
+        self.max_depth = 5
+        # Holds the selects defined by a call to values() or values_list()
+        # excluding annotation_select and extra_select.
+        self.values_select = ()
+        # SQL annotation-related attributes
+        self.annotations = {}  # Maps alias -> Annotation Expression
+        self.annotation_select_mask = None
+        self._annotation_select_cache = None
+        # Set combination attributes
+        self.combinator = None
+        self.combinator_all = False
+        self.combined_queries = ()
+        # These are for extensions. The contents are more or less appended
+        # verbatim to the appropriate clause.
+        self.extra = {}  # Maps col_alias -> (col_sql, params).
+        self.extra_select_mask = None
+        self._extra_select_cache = None
+        self.extra_tables = ()
+        self.extra_order_by = ()
+        # A tuple that is a set of model field names and either True, if these
+        # are the fields to defer, or False if these are the only fields to
+        # load.
+        self.deferred_loading = (frozenset(), True)
+        self._filtered_relations = {}
+        self.explain_query = False
+        self.explain_format = None
+        self.explain_options = {}
+
+    @property
+    def is_sliced(self):
+        return self.low_mark != 0 or self.high_mark is not None
 
     def get_meta(self):
         return self.model._meta
@@ -51,7 +128,7 @@ class UrlQuery(Query):
         self.nothing = True
 
     def clear_ordering(self, force_empty):
-        self.order_by = []
+        self.order_by = ()
 
     def add_ordering(self, *ordering):
         if ordering:
@@ -75,12 +152,13 @@ class UrlQuery(Query):
     def add_q(self, q_object):
         self.filters.update(dict(q_object.children))
 
-    def _execute(self, request_params, method='get', **kwargs):
-        query_params = {}
-        if self.high_mark is not None:
-            query_params['offset'] = self.low_mark
-        if self.low_mark is not None:
-            query_params['limit'] = self.high_mark - self.low_mark
+    def _execute(self, request_params, user=None, method='get', **kwargs):
+        if self.high_mark is None:
+            self.high_mark = settings.URLQS_HIGH_MARK
+        query_params = {
+            'offset': self.low_mark,
+            'limit': self.high_mark - self.low_mark
+        }
         if self.order_by:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:
@@ -89,7 +167,7 @@ class UrlQuery(Query):
         for key, value in query_params.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
                 query_params[key] = ",".join(str(i) for i in value)
-        _request_params = get_default_params()
+        _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
@@ -109,10 +187,12 @@ class UrlQuerySet(QuerySet):
         self._iterable_class = UrlModelIterable
         self._count = None
         self._result_cache = None
+        self.logged_user = None
 
     def _clone(self):
         c = super()._clone()
         c.request_params = self.request_params
+        c.logged_user = self.logged_user
         return c
 
     def as_manager(cls, **request_params):
@@ -139,26 +219,26 @@ class UrlQuerySet(QuerySet):
 
     def _fetch_all(self):
         if self._count is None:
-            response = self.query._execute(self.request_params)
+            response = self.query._execute(self.request_params, user=self.logged_user)
             self._result_cache = list(self.deserialize(response[settings.URLQS_RESULTS]))
             self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
         try:
-            response = self.query._execute(self.request_params, method='post', json=kwargs)
+            response = self.query._execute(self.request_params, user=self.logged_user, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]
         except HTTPError as e:
             raise ValidationError({'remote_api_error': e.response.json()})
 
     def delete(self, **kwargs):
         try:
-            response = self.query._execute(self.request_params, method='delete', json=kwargs)
+            response = self.query._execute(self.request_params, user=self.logged_user, method='delete', json=kwargs)
             return response
         except HTTPError as e:
             raise ValidationError({'remote_api_error': e.response.json()})
 
     def update(self, **kwargs):
-        return self._chain().query._execute(self.request_params, method='patch', json=kwargs)
+        return self._chain().query._execute(self.request_params, user=self.logged_user, method='patch', json=kwargs)
 
     def deserialize(self, json_data=()):
         related_fields = {}
@@ -185,6 +265,11 @@ class UrlQuerySet(QuerySet):
                 else:
                     setattr(obj, field, value)
             yield obj
+
+    def set_logged_user(self, user):
+        clone = self._chain()
+        clone.logged_user = user
+        return clone
 
     def __getitem__(self, k):
         """Retrieve an item or slice from the set of results."""

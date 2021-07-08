@@ -152,7 +152,7 @@ class UrlQuery:
     def add_q(self, q_object):
         self.filters.update(dict(q_object.children))
 
-    def _execute(self, request_params, user=None, method=None, **kwargs):
+    def _execute(self, request_params, user=None, method='get', **kwargs):
         if self.high_mark is None:
             self.high_mark = settings.URLQS_HIGH_MARK
         query_params = {
@@ -163,20 +163,22 @@ class UrlQuery:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:
             query_params['ordering'] = ','.join(self.get_meta().ordering)
-        query_params.update(self.filters)
-        for key, value in query_params.items():
+        filters = self.filters
+        for key, value in filters.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
-                query_params[key] = ",".join(str(i) for i in value)
+                filters[key] = ",".join(str(i) for i in value)
         _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
+        # fetch_method is used to change the method of list action of a model
         fetch_method = _request_params.pop('fetch_method')
-        method = fetch_method if not method else method
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
-        if query_params and fetch_method == 'get':
-            url = f"{url}?{urlencode(query_params, safe=',')}"
-        elif query_params and fetch_method == 'post':
-            _request_params['data'] = query_params
+        url = f"{url}?{urlencode(query_params, safe=',')}"
+        if filters and fetch_method == 'post' and method == 'get':
+            method = fetch_method
+            _request_params['json'] = filters
+        else:
+            url = f"{url}&{urlencode(filters, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
         return response.json() if response.headers.get('Content-Type') == 'application/json' else response

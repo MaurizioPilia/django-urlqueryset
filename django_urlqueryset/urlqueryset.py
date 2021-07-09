@@ -177,7 +177,7 @@ class UrlQuery:
         if filters and fetch_method == 'post' and method == 'get':
             method = fetch_method
             _request_params['json'] = filters
-        else:
+        elif filters:
             url = f"{url}&{urlencode(filters, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()

@@ -163,16 +163,22 @@ class UrlQuery:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:
             query_params['ordering'] = ','.join(self.get_meta().ordering)
-        query_params.update(self.filters)
-        for key, value in query_params.items():
+        filters = self.filters
+        for key, value in filters.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
-                query_params[key] = ",".join(str(i) for i in value)
+                filters[key] = ",".join(str(i) for i in value)
         _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
+        # fetch_method is used to change the method of list action of a model
+        fetch_method = _request_params.pop('fetch_method')
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
-        if query_params:
-            url = f"{url}?{urlencode(query_params, safe=',')}"
+        url = f"{url}?{urlencode(query_params, safe=',')}"
+        if filters and fetch_method == 'post' and method == 'get':
+            method = fetch_method
+            _request_params['json'] = filters
+        elif filters:
+            url = f"{url}&{urlencode(filters, safe=',')}"
         response = getattr(requests, method)(url=url, **_request_params)
         response.raise_for_status()
         return response.json() if response.headers.get('Content-Type') == 'application/json' else response
@@ -224,6 +230,8 @@ class UrlQuerySet(QuerySet):
             self._count = response[settings.URLQS_COUNT]
 
     def create(self, **kwargs):
+        if self.request_params.get('fetch_method') == 'post':
+            raise ValidationError({'remote_api_error': 'Create not available'})
         try:
             response = self.query._execute(self.request_params, user=self.logged_user, method='post', json=kwargs)
             return list(self.deserialize([response]))[0]

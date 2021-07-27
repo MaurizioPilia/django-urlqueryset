@@ -14,12 +14,16 @@ from .utils import get_default_params
 
 @deconstructible
 class UrlStorage(FileSystemStorage):
+    def __init__(self, *args, **kwargs):
+        self.params = get_default_params()
+        self.params.pop('fetch_method')
+        super().__init__(*args, **kwargs)
 
     def get_available_name(self, name, *args, **kwargs):
         return name
 
     def _open(self, url, mode='rb'):
-        params = get_default_params()
+        params = self.params.copy()
         params['url'] = url
         file = SpooledTemporaryFile(mode='b')
         file.write(requests.get(**params).content)
@@ -27,7 +31,7 @@ class UrlStorage(FileSystemStorage):
         return File(file, mode)
 
     def _save(self, url, content):
-        params = get_default_params()
+        params = self.params.copy()
         params['url'] = url
         params.setdefault('headers', {})['Content-Type'] = magic.from_buffer(content.read(100), mime=True)
         content.seek(0)

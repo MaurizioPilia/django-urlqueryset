@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+
 import requests
 from django.conf import settings
 from django.db.models.query import ModelIterable, QuerySet
@@ -163,10 +165,6 @@ class UrlQuery:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:
             query_params['ordering'] = ','.join(self.get_meta().ordering)
-        filters = self.filters
-        for key, value in filters.items():
-            if key.endswith('__in') and isinstance(value, (list, tuple)):
-                filters[key] = ",".join(str(i) for i in value)
         _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
@@ -174,6 +172,12 @@ class UrlQuery:
         fetch_method = _request_params.pop('fetch_method')
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
         url = f"{url}?{urlencode(query_params, safe=',')}"
+        filters = self.filters
+        for key, value in filters.items():
+            if key.endswith('__in') and isinstance(value, (list, tuple)):
+                filters[key] = ",".join(str(i) for i in value)
+            if isinstance(value, datetime):
+                filters[key] = value.strftime('%Y-%m-%d %H:%M')
         if filters and fetch_method == 'post' and method == 'get':
             method = fetch_method
             _request_params['json'] = filters

@@ -155,6 +155,7 @@ class UrlQuery:
         self.filters.update(dict(q_object.children))
 
     def _execute(self, request_params, user=None, method='get', **kwargs):
+        filters = self.filters
         if self.high_mark is None:
             self.high_mark = settings.URLQS_HIGH_MARK
         query_params = {
@@ -165,6 +166,9 @@ class UrlQuery:
             query_params['ordering'] = ','.join(self.order_by)
         elif self.get_meta().ordering:
             query_params['ordering'] = ','.join(self.get_meta().ordering)
+        if 'search' in filters:
+            query_params['search'] = filters['search']
+            filters.pop('search')
         _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)
@@ -172,7 +176,6 @@ class UrlQuery:
         fetch_method = _request_params.pop('fetch_method')
         url = _request_params.pop('url').replace('{{model._meta.model_name}}', self.model._meta.model_name)
         url = f"{url}?{urlencode(query_params, safe=',')}"
-        filters = self.filters
         for key, value in filters.items():
             if key.endswith('__in') and isinstance(value, (list, tuple)):
                 filters[key] = ",".join(str(i) for i in value)

@@ -202,6 +202,14 @@ class UrlQuerySet(QuerySet):
         self._result_cache = None
         self.logged_user = None
 
+    def count_with_result(self):
+        """
+        This is the equivalent of list(queryset) + queryset.count() in one operation(http call)
+        :return:
+        """
+        self._fetch_all()
+        return self._count, self._result_cache
+
     def _clone(self):
         c = super()._clone()
         c.request_params = self.request_params

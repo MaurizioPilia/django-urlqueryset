@@ -1,5 +1,3 @@
-import mimetypes
-import os
 from tempfile import SpooledTemporaryFile
 
 import magic

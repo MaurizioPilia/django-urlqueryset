@@ -1,5 +1,5 @@
 from django.db import models
-from  django.db.models.fields import files as file_fields
+from django.db.models.fields import files as file_fields
 
 from .storages import default_storage
 from .utils import get_default_params

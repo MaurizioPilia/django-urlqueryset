@@ -1,14 +1,18 @@
+import json
 import logging
 from datetime import datetime
 
 import requests
 from django.conf import settings
+from django.core import serializers
+from django.db import models
 from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
 from django.db.models.sql.where import WhereNode
 from requests import HTTPError
 from rest_framework.exceptions import ValidationError
 from urllib.parse import urlencode
+from django.core.serializers import base
 
 from django_urlqueryset.utils import get_default_params
 
@@ -264,8 +268,10 @@ class UrlQuerySet(QuerySet):
         return self._chain().query._execute(self.request_params, user=self.logged_user, method='patch', json=kwargs)
 
     def deserialize(self, json_data=()):
+        Model = self.model
+        field_names = {f.name for f in Model._meta.get_fields()}  # Model: <list of field_names>
         related_fields = {}
-        for field in self.model._meta.fields:
+        for field in Model._meta.fields:
             if field.related_model:
                 related_fields[field.name] = {'manager': field.related_model.objects, 'pks': []}
 
@@ -278,16 +284,25 @@ class UrlQuerySet(QuerySet):
             if data['pks']:
                 data['objs'] = {obj.pk: obj for obj in data['manager'].filter(pk__in=data['pks'])}
 
-        for obj_data in json_data:
-            obj = self.model()
-            for field, value in obj_data.items():
-                # if isinstance(value, list):
-                #     value = next(iter(value), '')
-                if value and field in related_fields.keys():
-                    setattr(obj, field, related_fields[field]['objs'][value])
+        for d in json_data:
+            # Look up the model and starting build a dict of data for it.
+            data = {}
+
+            # Handle each field
+            for (field_name, field_value) in d.items():
+                if field_name not in field_names:
+                    # skip fields no longer on model
+                    continue
+                field = Model._meta.get_field(field_name)
+
+                # Handle M2M relations and FK fields
+                if field_value and field.remote_field and isinstance(field.remote_field, (models.ManyToManyRel, models.ManyToOneRel)):
+                    data[field_name] = related_fields[field_name]['objs'][field_value]
+                # Handle all other fields
                 else:
-                    setattr(obj, field, value)
-            yield obj
+                    data[field.name] = field.to_python(field_value)
+
+            yield Model(**data)
 
     def set_logged_user(self, user):
         clone = self._chain()

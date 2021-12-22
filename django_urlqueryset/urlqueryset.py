@@ -245,7 +245,6 @@ class UrlQuerySetTest(QuerySet):
     def _fetch_all(self):
         if self._count is None:
             response = self.query._execute(self.request_params, user=self.logged_user)
-            print(type(response[settings.URLQS_RESULTS]))
             self._result_cache = list(self.deserialize(response[settings.URLQS_RESULTS]))
             self._count = response[settings.URLQS_COUNT]
 

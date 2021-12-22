@@ -5,7 +5,7 @@ import requests
 from django.core.serializers import json as json_serializer
 from django.db import models
 
-from django_urlqueryset.utils import get_default_params
+from .utils import get_default_params
 
 
 class UrlModel(models.Model):
@@ -14,7 +14,7 @@ class UrlModel(models.Model):
 
     def get_params(self):
         params = get_default_params()
-        params.pop('fetch_method')
+        params.pop('fetch_method', None)
         objects = type(self).objects
         if 'url' in objects.request_params:
             params.update(objects.request_params.copy())
@@ -36,7 +36,7 @@ class UrlModel(models.Model):
         params = self.get_params()
         data = self.to_dict()
         for k, v in kwargs.items():
-            assert isinstance(v, dict), "Not a dictionary"
+            assert isinstance(v, dict), f"{k} is not a dictionary"
             if k in data:
                 data[k].update(v)
             else:

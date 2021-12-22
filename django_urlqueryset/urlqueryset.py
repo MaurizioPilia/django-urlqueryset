@@ -195,7 +195,7 @@ class UrlQuery:
         return response.json() if response.headers.get('Content-Type') == 'application/json' else response
 
 
-class UrlQuerySetTest(QuerySet):
+class UrlQuerySet(QuerySet):
     def __init__(self, *args, **kwargs):
         self.request_params = kwargs.pop('request_params', {})
         super().__init__(*args, **kwargs)

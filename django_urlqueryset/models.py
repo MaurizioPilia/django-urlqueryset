@@ -2,8 +2,9 @@ import json
 from urllib import parse
 
 import requests
-from django.core.serializers import json as json_serializer
+from django.core import serializers
 from django.db import models
+from django.utils.module_loading import import_string
 
 from .utils import get_default_params
 
@@ -23,9 +24,10 @@ class UrlModel(models.Model):
     def to_dict(self):
         serializer_name = 'update_serializer' if self.pk else 'create_serializer'
         if hasattr(self, serializer_name):
-            _dict = getattr(self, serializer_name)(instance=self).data
+            serializer = import_string(getattr(self, serializer_name))
+            _dict = serializer(instance=self).data
         else:
-            _dict = json.loads(json_serializer([self]))[0]['fields']
+            _dict = json.loads(serializers.serialize('json', [self]))[0]['fields']
 
         for field in self._meta.get_fields():
             if isinstance(field, models.FileField):
@@ -36,8 +38,8 @@ class UrlModel(models.Model):
         params = self.get_params()
         data = self.to_dict()
         for k, v in kwargs.items():
-            assert isinstance(v, dict), f"{k} is not a dictionary"
-            if k in data:
+            if k in data and isinstance(data[k], dict):
+                assert isinstance(v, dict), f"{v} is not a dictionary"
                 data[k].update(v)
             else:
                 data[k] = v

@@ -37,6 +37,23 @@ class UrlStorage(FileSystemStorage):
         response.raise_for_status()
         return url
 
+    def save(self, name, content, max_length=None):
+        """
+        In Django 3.2.11 has been introduced a validation on the file name that can't contain these characters {'', '.', '..'}
+        In this package it is used an url as a name file which contains '.'. This raises a SuspiciousFileOperation exception.
+        So, this line has been removed validate_file_name(name, allow_relative_path=True) to avoid the exception
+        """
+        # Get the proper name for the file, as it will actually be saved.
+        if name is None:
+            name = content.name
+
+        if not hasattr(content, 'chunks'):
+            content = File(content, name)
+
+        name = self.get_available_name(name, max_length=max_length)
+        name = self._save(name, content)
+        return name
+
     def exists(self, name):
         return True
 

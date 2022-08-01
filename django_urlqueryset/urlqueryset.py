@@ -173,6 +173,7 @@ class UrlQuery:
         if 'search' in filters:
             query_params['search'] = filters['search']
             filters.pop('search')
+
         _request_params = get_default_params(user)
         _request_params.update(request_params.copy())
         _request_params.update(kwargs)

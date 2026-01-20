@@ -19,6 +19,7 @@ class UrlModel(models.Model):
         objects = type(self).objects
         if 'url' in objects.request_params:
             params.update(objects.request_params.copy())
+        params.pop('fetch_method', None)
         return params
 
     def to_dict(self):

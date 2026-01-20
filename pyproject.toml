@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-urlqueryset"
+version = "1.0.0"
+description = "Django library to manage models from external services as if they were local"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Maurizio Pilia"}
+]
+urls = {Homepage = "https://github.com/MaurizioPilia/django-urlqueryset"}
+dependencies = [
+    "Django>=5.2,<6.0",
+    "djangorestframework>=3.15.0",
+    "requests>=2.11.1",
+    "python-magic>=0.4.18",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+    "responses>=0.25",
+    "model-bakery>=1.18",
+]
+
+[tool.setuptools]
+packages = ["django_urlqueryset"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+pythonpath = ["."]

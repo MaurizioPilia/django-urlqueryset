@@ -1,13 +1,23 @@
-import pkg_resources
-from .urlqueryset import UrlQuerySet
-from .fields import UrlFileField, UrlImageField
-from .models import UrlModel
+from importlib.metadata import version
 
 __all__ = ('UrlQuerySet', 'UrlFileField', 'UrlImageField', 'UrlModel', 'VERSION')
 
-__version__ = pkg_resources.get_distribution(__name__).version
+__version__ = version(__name__)
 
 VERSION = __version__.split('.')
 
-default_app_config = 'django_urlqueryset.apps.CheckConfig'
 
+def __getattr__(name):
+    if name == 'UrlQuerySet':
+        from .urlqueryset import UrlQuerySet
+        return UrlQuerySet
+    if name == 'UrlFileField':
+        from .fields import UrlFileField
+        return UrlFileField
+    if name == 'UrlImageField':
+        from .fields import UrlImageField
+        return UrlImageField
+    if name == 'UrlModel':
+        from .models import UrlModel
+        return UrlModel
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

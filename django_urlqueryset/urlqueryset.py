@@ -1,18 +1,15 @@
-import json
 import logging
 from datetime import datetime
+from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
-from django.core import serializers
 from django.db import models
 from django.db.models.query import ModelIterable, QuerySet
 from django.db.models.sql import Query
 from django.db.models.sql.where import WhereNode
 from requests import HTTPError
 from rest_framework.exceptions import ValidationError
-from urllib.parse import urlencode
-from django.core.serializers import base
 
 from django_urlqueryset.utils import get_default_params
 
@@ -133,7 +130,7 @@ class UrlQuery:
     def set_empty(self):
         self.nothing = True
 
-    def clear_ordering(self, force_empty):
+    def clear_ordering(self, force=False, clear_default=True):
         self.order_by = ()
 
     def add_ordering(self, *ordering):
@@ -318,9 +315,6 @@ class UrlQuerySet(QuerySet):
                 (isinstance(k, slice) and (k.start is None or k.start >= 0) and
                  (k.stop is None or k.stop >= 0))), \
             "Negative indexing is not supported."
-
-        # if self._result_cache is not None:
-        #     return self._result_cache[k]
 
         if isinstance(k, slice):
             qs = self._chain()
